@@ -777,7 +777,7 @@ static void renderBackground(Canvas &c) {
 
 // ---------------------------------------------------------------- WiFi, web page, OTA
 static const char PAGE[] PROGMEM = R"HTML(<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Deer Hunt</title><style>body{font:16px system-ui;background:#1a1612;color:#eadfcb;max-width:560px;margin:0 auto;padding:16px}
+<title>Deer Hunt</title><link rel="icon" href="/favicon.ico"><style>body{font:16px system-ui;background:#1a1612;color:#eadfcb;max-width:560px;margin:0 auto;padding:16px}
 h1{margin:0 0 4px}small{color:#a89b82}.c{background:#2a231b;border-radius:10px;padding:14px;margin:12px 0}
 label{display:block;margin:8px 0}select,input[type=number]{background:#1a1612;color:#eadfcb;border:1px solid #5a4a36;border-radius:6px;padding:4px}
 button,a.b{background:#b8742e;color:#fff;border:0;border-radius:8px;padding:9px 14px;font:inherit;text-decoration:none;display:inline-block;margin:4px 4px 0 0;cursor:pointer}
@@ -881,8 +881,15 @@ static bool numArg(const char *name, int lo, int hi, int &out) {
 static void renderStrip(int i);
 #endif
 
+extern const uint8_t favicon_start[] asm("_binary_apps_deerhunt_favicon_ico_start");
+extern const uint8_t favicon_end[] asm("_binary_apps_deerhunt_favicon_ico_end");
+
 static void setupWeb() {
   server.on("/", HTTP_GET, []() { server.send_P(200, "text/html", PAGE); });
+  server.on("/favicon.ico", HTTP_GET, []() {
+    server.sendHeader("Cache-Control", "max-age=86400");
+    server.send_P(200, "image/x-icon", (PGM_P)favicon_start, favicon_end - favicon_start);
+  });
   // Raw copy of the screen (RGB565, big-endian) for screenshots.
   server.on("/api/frame", HTTP_GET, []() {
     const size_t total = PANEL_W * PANEL_H * 2;
