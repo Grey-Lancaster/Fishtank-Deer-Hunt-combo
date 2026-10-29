@@ -2,6 +2,7 @@
 # Build Fish Tank + Deer Hunt on greyhound and merge them into one USB-flash image per board.
 #   tools/build_combo.sh [board ...]        boards: freenove4 freenove28 cyd28 cyd28usb2 (default: all four)
 # Needs the "GreyHound" entry in ~/.ssh/config. Output: dist/Fishtank-DeerHunt-<board>-USB.bin, flash it at offset 0x0.
+# Each image is also copied to docs/firmware/fishtank-deerhunt-<board>.bin, which is what the web installer flashes.
 # There is no OTA in the combo build, so this image is the only way onto a board (and the only way to update one).
 set -euo pipefail
 BOARDS=("$@"); [ ${#BOARDS[@]} -eq 0 ] && BOARDS=(freenove4 freenove28 cyd28 cyd28usb2)
@@ -30,4 +31,6 @@ for b in "${BOARDS[@]}"; do
       0x10000 out/$b/fish.bin $APP1 out/$b/deer.bin"
   "${SCP[@]}" "GreyHound:cyd-build/Fishtank-Deer-Hunt-Combo/out/$b/combo.bin" "dist/Fishtank-DeerHunt-$b-USB.bin"
   ls -l "dist/Fishtank-DeerHunt-$b-USB.bin"
+  mkdir -p docs/firmware
+  cp "dist/Fishtank-DeerHunt-$b-USB.bin" "docs/firmware/fishtank-deerhunt-$b.bin"
 done
