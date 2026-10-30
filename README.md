@@ -17,7 +17,7 @@ Prefer the command line? `esptool.py write_flash 0x0 Fishtank-DeerHunt-<board>-U
 
 **No OTA.** The ElegantOTA `/update` page and ArduinoOTA are removed, because an over-the-air update could only replace the running slot and would break the pairing. Every install or update is a USB flash of the merged image, which is what the web installer writes at offset `0x0`.
 
-**Settings.** WiFi networks are shared (same TouchWifiProvisioner version and NVS layout), so a switch comes back online by itself. Everything else (volume, time zone, alarm, hostname) is kept per app. Hostnames differ (`fishtank.local` / `deerhunt.local`, `fishtank28` / `deerhunt28`, `cydfishtank` / `cyddeerhunt`); the web page reloads at the board's IP after a switch.
+**Settings.** WiFi networks are shared (same TouchWifiProvisioner version and NVS layout), so a switch comes back online by itself. Everything else (volume, time zone, alarm) is kept per app. **Both apps answer to `http://huntfish.local`** on every board (the default hostname; only one app runs at a time, so there is no clash). After a switch the web page reloads at the board's IP address. If you rename a board on Fish Tank's web page, that name applies to Fish Tank only.
 
 ## Builds
 `pio run -e <app>-<board>` with app `fish` or `deer`, board `freenove4`, `freenove28`, `cyd28`, `cyd28usb2`. `tools/build_combo.sh [board ...]` builds both apps on greyhound and merges them into `dist/`; it also copies each image to `docs/firmware/fishtank-deerhunt-<board>.bin` for the web installer, so commit and push `docs/firmware/` after a rebuild. Partitions: `partitions_16MB.csv` (2 x 3 MB) for the Freenove boards, `partitions_4MB.csv` (2 x 1.94 MB) for the CYDs. The CYD apps use 83-87% of their slot.

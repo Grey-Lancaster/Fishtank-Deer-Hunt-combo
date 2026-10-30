@@ -24,7 +24,7 @@
   #define ROT_LEFT 3            // USB port on the left (assumes the USB ports are on the bottom edge in portrait)
   #define ROT_RIGHT 1
   #define DEFAULT_ROT ROT_LEFT
-  #define DEFAULT_HOST "cydfishtank"
+  #define DEFAULT_HOST "huntfish"
   #define TIME_Y 6
   #define DATE_Y 46
   #define FONT_BIG 2
@@ -38,7 +38,7 @@
   #define ROT_LEFT 3
   #define ROT_RIGHT 1
   #define DEFAULT_ROT ROT_LEFT
-  #define DEFAULT_HOST "fishtank28"
+  #define DEFAULT_HOST "huntfish"
   #define TIME_Y 6
   #define DATE_Y 46
   #define FONT_BIG 2
@@ -52,7 +52,7 @@
   #define ROT_LEFT 3            // USB port on the left
   #define ROT_RIGHT 1
   #define DEFAULT_ROT ROT_LEFT
-  #define DEFAULT_HOST "fishtank"
+  #define DEFAULT_HOST "huntfish"
   #define TIME_Y 8
   #define DATE_Y 37
   #define FONT_BIG 4

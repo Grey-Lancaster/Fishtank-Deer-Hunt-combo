@@ -19,7 +19,7 @@
 #include "motion.h"
 #include "wifi_setup.h"
 
-#define FW_VERSION "1.7.0"
+#define FW_VERSION "1.7.1"
 
 TFT_eSPI tft = TFT_eSPI();
 TFT_eSprite frame = TFT_eSprite(&tft);    // Freenove: the whole frame
@@ -984,7 +984,7 @@ static void setupWeb() {
     if (c == "test") alTest(millis()); else if (c == "stop") alStop();
     server.send(200, "text/plain", "ok");
   });
-  server.on("/api/bub", HTTP_ANY, []() { audioBubMode(server.arg("m").length() ? server.arg("m").toInt() : 1, server.arg("g").toInt()); server.send(200, "text/plain", "ok"); });   // CYD bubble variants
+  server.on("/api/bub", HTTP_ANY, []() { audioBubMode(server.arg("m").length() ? server.arg("m").toInt() : 1, server.arg("g").toInt()); server.send(200, "text/plain", "ok"); });   // CYD bubbles on/off and gain
   server.on("/api/lamb", HTTP_ANY, []() { audioLamb(); server.send(200, "text/plain", "ok"); });   // speaker test tune
   server.on("/api/diver", HTTP_ANY, []() {         // send the diver out right now (opens the chest too)
     static bool nextRight = true;

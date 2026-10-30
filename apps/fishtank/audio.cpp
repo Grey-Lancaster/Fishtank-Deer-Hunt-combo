@@ -1,10 +1,7 @@
 #include "audio.h"
 #include "hal.h"
 
-#ifdef BOARD_CYD28      // the CYD plays its own 44.1 kHz 8-bit ambience loop (see audioBubbles44)
-extern const uint8_t cydBub_start[] asm("_binary_apps_fishtank_bubbles_cyd_wav_start");
-extern const uint8_t cydBub_end[] asm("_binary_apps_fishtank_bubbles_cyd_wav_end");
-#else
+#ifndef BOARD_CYD28     // the CYD synthesises its own 44.1 kHz ambience (see audioBubbles44)
 extern const uint8_t bubbles_start[] asm("_binary_apps_fishtank_bubbles_raw_start");
 extern const uint8_t bubbles_end[] asm("_binary_apps_fishtank_bubbles_raw_end");
 #endif
@@ -76,37 +73,58 @@ static int32_t alarmSample(uint32_t n) {
 
 #ifdef BOARD_CYD28
 // The CYD's 8-bit DAC needs the ambience at a high sample rate (like PhotoFrame's 44.1 kHz WAV), so it is a
-// separate stream mixed in by the HAL at 44.1 kHz, not part of the 16 kHz mixer. 10 s of 8-bit mono.
-static volatile int g_bubMode = 1, g_bubGain = 4;
+// separate stream mixed in by the HAL at 44.1 kHz, not part of the 16 kHz mixer. It is synthesised: the CYD speaker
+// plays almost nothing below ~1 kHz, and everything tried that lives there sounded bad on it (Grey's aquarium recording
+// as is, denoised, sped up, or pitched up 2-3 octaves; the Freenove bubbles file; gliding "bloops" like it at 1-2x its
+// pitch). Mode: 0 = off, anything else = on.
+static volatile int g_bubMode = 2, g_bubGain = 1;
 void audioBubMode(int m, int g) { g_bubMode = m; if (g >= 1 && g <= 16) g_bubGain = g; }
-void audioBubbles44(int16_t *out, int n) {
-  // The file is played exactly as it is: mono, 44.1 kHz, 16-bit PCM WAV (the PhotoFrame spec). Find its data chunk.
-  static const uint8_t *pcm = nullptr; static size_t len = 0, pos = 0;
-  if (!pcm) {
-    const uint8_t *p = cydBub_start + 12;                      // skip "RIFF....WAVE"
-    while (p + 8 <= cydBub_end) {
-      const uint32_t sz = p[4] | (p[5] << 8) | (p[6] << 16) | ((uint32_t)p[7] << 24);
-      if (!memcmp(p, "data", 4)) { pcm = p + 8; len = min((size_t)sz, (size_t)(cydBub_end - pcm)) / 2; break; }
-      p += 8 + sz + (sz & 1);
+// Synthesised bubbles. Each bubble has a random size: small ones ring high and short, big ones
+// lower and longer (a damped sine with a slight upward glide), with a tiny noise splash at the start. They come in
+// fast bursts of mostly small bubbles with the occasional big blob, then a pause. No loop, so nothing repeats.
+static void bubblesSynth(int16_t *out, int n, bool on) {
+  struct Voice { float ph, f, rise, amp, dec, splash, sdec; bool live; };
+  static Voice vs[12];
+  static uint32_t rnd = 2463534242u, wait = 22050, burst = 0;
+  static const float SR = 44100.0f;
+  auto rf = [&]() { rnd ^= rnd << 13; rnd ^= rnd >> 17; rnd ^= rnd << 5; return (rnd & 0xFFFF) / 65535.0f; };
+  auto spawn = [&]() {
+    for (Voice &v : vs) if (!v.live) {
+      const float r = 0.8f + 4.2f * powf(rf(), 2.2f);                       // radius in mm: mostly small, some big
+      v.f = constrain(3100.0f / r, 750.0f, 3800.0f);                       // small = high, big = low
+      v.ph = 0;
+      v.rise = 1.0f + (0.03f + 0.12f * rf()) / (0.015f * SR);
+      v.amp = (0.08f + 0.30f * rf()) * (0.6f + 0.1f * r);                  // very uneven loudness
+      v.dec = expf(-1.0f / ((0.0025f + 0.0022f * r) * SR));               // 3-12 ms, longer for big ones
+      v.splash = 0.18f * v.amp * (0.5f + rf());                            // the "pop" noise at the start
+      v.sdec = expf(-1.0f / (0.0008f * SR));
+      v.live = true;
+      return;
     }
-    if (!pcm) len = 0;
-  }
-  const bool on = len > 0 && g_snd && g_sBub && !g_asleep && !g_isNight && g_bubMode != 0;
+  };
   for (int i = 0; i < n; i++) {
-    int32_t v = 0;
-    if (on) {
-      const size_t X = 2205;                                   // 50 ms: blend the end into the start so the loop point does not click
-      int16_t x; memcpy(&x, pcm + pos * 2, 2);
-      int32_t y = x;
-      if (len > 4 * X && pos >= len - X) {
-        int16_t h; memcpy(&h, pcm + (pos - (len - X)) * 2, 2);
-        y = ((int32_t)x * (int32_t)(len - pos) + (int32_t)h * (int32_t)(pos - (len - X))) / (int32_t)X;
-      }
-      v = (y * g_vol * g_bubGain) / 60;                        // gain 1 = the file as it is at volume 60; default x4, the recording is quiet
+    if (wait == 0) {
+      spawn();
+      if (burst == 0) burst = 2 + (uint32_t)(10.0f * rf() * rf());       // a new burst of 2-12
+      if (--burst > 0) wait = (uint32_t)((0.006f + 0.05f * rf() * rf()) * SR);       // 6-56 ms, mostly quick
+      else wait = (uint32_t)((0.25f + 1.3f * rf()) * SR);                             // then a pause
+    } else wait--;
+    float sum = 0;
+    for (Voice &v : vs) if (v.live) {
+      rnd ^= rnd << 13; rnd ^= rnd >> 17; rnd ^= rnd << 5;
+      const float nz = ((int32_t)(rnd & 0xFFFF) - 32768) / 32768.0f;
+      sum += v.amp * sinC(v.ph) + v.splash * nz;
+      v.ph += v.f / SR; if (v.ph >= 1.0f) v.ph -= 1.0f;
+      v.f *= v.rise; v.amp *= v.dec; v.splash *= v.sdec;
+      if (v.amp < 0.004f) v.live = false;
     }
-    out[i] = (int16_t)constrain(v, -32768, 32767);
-    if (on && ++pos >= len) pos = len > 4 * 2205 ? 2205 : 0;
+    out[i] = on ? (int16_t)constrain((int32_t)(sum * 32767.0f * 0.8f), -32768, 32767) : 0;
   }
+}
+
+void audioBubbles44(int16_t *out, int n) {
+  bubblesSynth(out, n, g_bubMode != 0 && g_snd && g_sBub && !g_asleep && !g_isNight);
+  for (int i = 0; i < n; i++) out[i] = (int16_t)constrain(((int32_t)out[i] * g_vol * g_bubGain) / 60, -32768, 32767);
 }
 #else
 void audioBubMode(int, int) {}
